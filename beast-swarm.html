@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2D1B14">
+    <title>Beast Swarm - Real Multiplayer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+            user-select: none;
+        }
+
+        body {
+            background: linear-gradient(135deg, #2D1B14, #4A3728);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #gameCanvas {
+            background: linear-gradient(45deg, #8B4513, #A0522D);
+            border: none;
+            flex: 1;
+            width: 100%;
+        }
+
+        #multiplayerMenu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            border: 3px solid #8B4513;
+            z-index: 100;
+        }
+
+        #multiplayerMenu h2 {
+            margin-bottom: 20px;
+            color: #FFD700;
+        }
+
+        #multiplayerMenu button {
+            background: #8B4513;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            margin: 10px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+        }
+
+        #multiplayerMenu button:hover {
+            background: #A0522D;
+        }
+
+        #multiplayerMenu input {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid #8B4513;
+            color: white;
+            padding: 10px;
+            margin: 10px;
+            border-radius: 5px;
+            font-size: 18px;
+            text-align: center;
+            width: 120px;
+        }
+
+        #gameUI {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 16px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+
+        #joystick {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 120px;
+            height: 120px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 50%;
+            pointer-events: all;
+            touch-action: none;
+        }
+
+        #joystickKnob {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #instructions {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 12px;
+            text-align: right;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+
+        #connectionStatus {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: white;
+            font-size: 12px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+
+        .heart {
+            color: #ff4444;
+            font-size: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="multiplayerMenu">
+            <h2>🏹 Beast Swarm</h2>
+            <p>Real Multiplayer Caveman Survival!</p>
+            
+            <div id="mainMenu">
+                <button onclick="createRoom()">🏕️ Create Room</button>
+                <button onclick="showJoinMenu()">🚪 Join Room</button>
+            </div>
+            
+            <div id="joinMenu" class="hidden">
+                <input type="text" id="roomCodeInput" placeholder="ROOM CODE" maxlength="4">
+                <br>
+                <button onclick="joinRoom()">Join Game</button>
+                <button onclick="hideJoinMenu()">Back</button>
+            </div>
+            
+            <div id="waitingRoom" class="hidden">
+                <p>Room Code: <strong id="roomCode"></strong></p>
+                <p>Players: <span id="playerCount">1/4</span></p>
+                <div id="playerList"></div>
+                <button id="startButton" onclick="startGame()" class="hidden">🎮 Start Game</button>
+                <p style="margin-top: 15px; font-size: 12px; opacity: 0.8;">
+                    Waiting for host to start...
+                </p>
+            </div>
+        </div>
+        
+        <div id="gameUI" class="hidden">
+            <div id="stats">
+                <div>Health: <span id="health">♥♥♥♥♥</span></div>
+                <div>Players: <span id="playersAlive">0</span></div>
+                <div>Time: <span id="timer">60s</span></div>
+            </div>
+            
+            <div id="instructions">
+                <div>🏹 Tap to shoot</div>
+                <div>⚠️ Friendly fire ON!</div>
+                <div>⚔️ Survive together!</div>
+            </div>
+            
+            <div id="connectionStatus">
+                <span id="connectionText">🔴 Connecting...</span>
+            </div>
+            
+            <div id="joystick">
+                <div id="joystickKnob"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.io client -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    
+    <script>
+        // CHANGE THIS TO YOUR RAILWAY URL!
+        const SERVER_URL = 'caveman-beast-swarm-production.up.railway.app'; // Update this!
+        
+        class BeastSwarmMultiplayer {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.setupCanvas();
+                
+                // Game state
+                this.gameState = 'menu'; // 'menu', 'waiting', 'playing'
+                this.isHost = false;
+                this.roomCode = '';
+                this.playerId = null;
+                
+                // Players
+                this.players = new Map();
+                this.myPlayer = null;
+                
+                // Game objects
+                this.arrows = [];
+                this.beasts = [];
+                this.particles = [];
+                
+                // Controls
+                this.joystick = {
+                    element: document.getElementById('joystick'),
+                    knob: document.getElementById('joystickKnob'),
+                    active: false,
+                    x: 0,
+                    y: 0
+                };
+                
+                this.input = { moveX: 0, moveY: 0 };
+                this.gameTime = 60;
+                
+                // Player colors
+                this.playerColors = ['#8B4513', '#FF6B6B', '#4ECDC4', '#45B7D1'];
+                
+                this.setupEventListeners();
+                this.connectToServer();
+                this.gameLoop();
+            }
+            
+            setupCanvas() {
+                const rect = this.canvas.getBoundingClientRect();
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+                this.width = rect.width;
+                this.height = rect.height;
+            }
+            
+            connectToServer() {
+                console.log('Connecting to server...');
+                this.socket = io(SERVER_URL);
+                
+                // Connection events
+                this.socket.on('connect', () => {
+                    console.log('Connected to server!');
+                    this.playerId = this.socket.id;
+                    this.updateConnectionStatus('🟢 Connected');
+                });
+                
+                this.socket.on('disconnect', () => {
+                    console.log('Disconnected from server');
+                    this.updateConnectionStatus('🔴 Disconnected');
+                });
+                
+                // Room events
+                this.socket.on('roomCreated', (data) => {
+                    console.log('Room created:', data);
+                    this.roomCode = data.roomCode;
+                    this.isHost = true;
+                    this.myPlayer = data.player;
+                    this.players.set(data.player.id, data.player);
+                    this.showWaitingRoom();
+                });
+                
+                this.socket.on('roomJoined', (data) => {
+                    console.log('Room joined:', data);
+                    this.roomCode = data.roomCode;
+                    this.myPlayer = data.player;
+                    
+                    // Add all players
+                    data.players.forEach(player => {
+                        this.players.set(player.id, player);
+                    });
+                    
+                    this.showWaitingRoom();
+                });
+                
+                this.socket.on('playerJoined', (data) => {
+                    console.log('Player joined:', data);
+                    this.players.set(data.player.id, data.player);
+                    this.updatePlayerList();
+                });
+                
+                this.socket.on('playerLeft', (data) => {
+                    console.log('Player left:', data);
+                    this.players.delete(data.playerId);
+                    this.updatePlayerList();
+                });
+                
+                this.socket.on('newHost', (data) => {
+                    if (data.hostId === this.playerId) {
+                        this.isHost = true;
+                        document.getElementById('startButton').classList.remove('hidden');
+                    }
+                });
+                
+                // Game events
+                this.socket.on('gameStarted', (data) => {
+                    console.log('Game started!');
+                    this.startGameplay();
+                });
+                
+                this.socket.on('playerMoved', (data) => {
+                    const player = this.players.get(data.playerId);
+                    if (player) {
+                        player.x = data.x;
+                        player.y = data.y;
+                    }
+                });
+                
+                this.socket.on('arrowShot', (data) => {
+                    // Add arrow from other player
+                    this.arrows.push({
+                        x: data.x,
+                        y: data.y,
+                        vx: data.vx,
+                        vy: data.vy,
+                        size: 4,
+                        life: 100,
+                        shooter: data.shooterId,
+                        color: this.players.get(data.shooterId)?.color || '#8B4513'
+                    });
+                });
+                
+                this.socket.on('playerWasHit', (data) => {
+                    const player = this.players.get(data.playerId);
+                    if (player) {
+                        player.health = data.health;
+                        this.createParticles(player.x, player.y, '#FF0000', 8);
+                        
+                        if (data.playerId === this.playerId) {
+                            // Flash screen when hit
+                            document.body.style.background = '#FF0000';
+                            setTimeout(() => {
+                                document.body.style.background = 'linear-gradient(135deg, #2D1B14, #4A3728)';
+                            }, 100);
+                        }
+                    }
+                });
+                
+                this.socket.on('gameOver', (data) => {
+                    alert(`🎮 Game Over!\n\nReason: ${data.reason === 'allDead' ? 'Everyone died!' : 'Time up!'}`);
+                    location.reload();
+                });
+                
+                this.socket.on('error', (data) => {
+                    alert(`Error: ${data.message}`);
+                });
+            }
+            
+            setupEventListeners() {
+                // Prevent scrolling
+                document.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                }, { passive: false });
+                
+                // Shooting
+                this.canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (this.gameState === 'playing') this.shoot(e);
+                });
+                
+                this.canvas.addEventListener('click', (e) => {
+                    if (this.gameState === 'playing') this.shoot(e);
+                });
+                
+                // Joystick
+                this.joystick.element.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.startJoystick(e);
+                });
+                
+                this.joystick.element.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    this.moveJoystick(e);
+                });
+                
+                this.joystick.element.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.endJoystick();
+                });
+                
+                // Mouse fallback
+                this.joystick.element.addEventListener('mousedown', (e) => {
+                    this.startJoystick(e);
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (this.joystick.active) this.moveJoystick(e);
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    this.endJoystick();
+                });
+            }
+            
+            showWaitingRoom() {
+                document.getElementById('mainMenu').classList.add('hidden');
+                document.getElementById('joinMenu').classList.add('hidden');
+                document.getElementById('waitingRoom').classList.remove('hidden');
+                document.getElementById('roomCode').textContent = this.roomCode;
+                
+                if (this.isHost) {
+                    document.getElementById('startButton').classList.remove('hidden');
+                }
+                
+                this.updatePlayerList();
+            }
+            
+            updatePlayerList() {
+                const playerList = document.getElementById('playerList');
+                const playerCount = document.getElementById('playerCount');
+                
+                playerCount.textContent = `${this.players.size}/4`;
+                
+                playerList.innerHTML = '';
+                this.players.forEach((player, i) => {
+                    const div = document.createElement('div');
+                    div.textContent = `${player.isHost ? '👑 ' : ''}Player ${Array.from(this.players.keys()).indexOf(player.id) + 1}`;
+                    div.style.color = this.playerColors[Array.from(this.players.keys()).indexOf(player.id)];
+                    playerList.appendChild(div);
+                });
+            }
+            
+            startGameplay() {
+                this.gameState = 'playing';
+                document.getElementById('multiplayerMenu').classList.add('hidden');
+                document.getElementById('gameUI').classList.remove('hidden');
+                
+                // Assign colors to players
+                const playerIds = Array.from(this.players.keys());
+                playerIds.forEach((id, index) => {
+                    const player = this.players.get(id);
+                    player.color = this.playerColors[index];
+                    player.x = this.width / 2 + (index - playerIds.length/2) * 80;
+                    player.y = this.height / 2;
+                    player.health = 5;
+                });
+                
+                this.spawnBeast();
+                if (this.isHost) {
+                    this.startTimer();
+                }
+            }
+            
+            startJoystick(e) {
+                if (this.gameState !== 'playing') return;
+                this.joystick.active = true;
+                const rect = this.joystick.element.getBoundingClientRect();
+                this.joystick.centerX = rect.left + rect.width / 2;
+                this.joystick.centerY = rect.top + rect.height / 2;
+                this.moveJoystick(e);
+            }
+            
+            moveJoystick(e) {
+                if (!this.joystick.active || this.gameState !== 'playing') return;
+                
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                const deltaX = clientX - this.joystick.centerX;
+                const deltaY = clientY - this.joystick.centerY;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = 35;
+                
+                if (distance < maxDistance) {
+                    this.joystick.x = deltaX;
+                    this.joystick.y = deltaY;
+                } else {
+                    this.joystick.x = (deltaX / distance) * maxDistance;
+                    this.joystick.y = (deltaY / distance) * maxDistance;
+                }
+                
+                this.input.moveX = this.joystick.x / maxDistance;
+                this.input.moveY = this.joystick.y / maxDistance;
+                
+                this.joystick.knob.style.transform = `translate(${this.joystick.x}px, ${this.joystick.y}px)`;
+            }
+            
+            endJoystick() {
+                this.joystick.active = false;
+                this.joystick.x = 0;
+                this.joystick.y = 0;
+                this.input.moveX = 0;
+                this.input.moveY = 0;
+                this.joystick.knob.style.transform = 'translate(0px, 0px)';
+            }
+            
+            shoot(e) {
+                if (!this.myPlayer || this.gameState !== 'playing') return;
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                const targetX = clientX - rect.left;
+                const targetY = clientY - rect.top;
+                
+                const deltaX = targetX - this.myPlayer.x;
+                const deltaY = targetY - this.myPlayer.y;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                
+                if (distance > 0) {
+                    const spawnDistance = 25;
+                    const spawnX = this.myPlayer.x + (deltaX / distance) * spawnDistance;
+                    const spawnY = this.myPlayer.y + (deltaY / distance) * spawnDistance;
+                    
+                    const arrowData = {
+                        x: spawnX,
+                        y: spawnY,
+                        vx: (deltaX / distance) * 8,
+                        vy: (deltaY / distance) * 8
+                    };
+                    
+                    // Send to server
+                    this.socket.emit('shootArrow', arrowData);
+                    
+                    // Add locally
+                    this.arrows.push({
+                        ...arrowData,
+                        size: 4,
+                        life: 100,
+                        shooter: this.playerId,
+                        color: this.myPlayer.color
+                    });
+                    
+                    this.createParticles(this.myPlayer.x, this.myPlayer.y, '#FFD700', 3);
+                    navigator.vibrate && navigator.vibrate(50);
+                }
+            }
+            
+            spawnBeast() {
+                if (this.gameState !== 'playing') return;
+                
+                const side = Math.floor(Math.random() * 4);
+                let x, y;
+                
+                switch(side) {
+                    case 0: x = Math.random() * this.width; y = -20; break;
+                    case 1: x = this.width + 20; y = Math.random() * this.height; break;
+                    case 2: x = Math.random() * this.width; y = this.height + 20; break;
+                    case 3: x = -20; y = Math.random() * this.height; break;
+                }
+                
+                this.beasts.push({
+                    x: x,
+                    y: y,
+                    size: 15 + Math.random() * 10,
+                    speed: 1 + Math.random() * 1.5,
+                    color: '#8B0000'
+                });
+                
+                setTimeout(() => this.spawnBeast(), 2000 + Math.random() * 3000);
+            }
+            
+            createParticles(x, y, color, count) {
+                for (let i = 0; i < count; i++) {
+                    this.particles.push({
+                        x: x,
+                        y: y,
+                        vx: (Math.random() - 0.5) * 6,
+                        vy: (Math.random() - 0.5) * 6,
+                        size: 2 + Math.random() * 3,
+                        color: color,
+                        life: 30 + Math.random() * 20,
+                        maxLife: 50
+                    });
+                }
+            }
+            
+            update() {
+                if (this.gameState !== 'playing') return;
+                
+                // Update my player movement
+                if (this.myPlayer) {
+                    const oldX = this.myPlayer.x;
+                    const oldY = this.myPlayer.y;
+                    
+                    this.myPlayer.x += this.input.moveX * 4;
+                    this.myPlayer.y += this.input.moveY * 4;
+                    
+                    this.myPlayer.x = Math.max(20, Math.min(this.width - 20, this.myPlayer.x));
+                    this.myPlayer.y = Math.max(20, Math.min(this.height - 20, this.myPlayer.y));
+                    
+                    // Send movement to server if position changed
+                    if (oldX !== this.myPlayer.x || oldY !== this.myPlayer.y) {
+                        this.socket.emit('playerMove', {
+                            x: this.myPlayer.x,
+                            y: this.myPlayer.y
+                        });
+                    }
+                }
+                
+                // Update arrows
+                this.arrows = this.arrows.filter(arrow => {
+                    arrow.x += arrow.vx;
+                    arrow.y += arrow.vy;
+                    arrow.life--;
+                    
+                    if (arrow.x < 0 || arrow.x > this.width || arrow.y < 0 || arrow.y > this.height || arrow.life <= 0) {
+                        return false;
+                    }
+                    
+                    // Check player collisions (friendly fire!)
+                    for (let [playerId, player] of this.players) {
+                        if (player.health > 0) {
+                            const dist = Math.sqrt((arrow.x - player.x) ** 2 + (arrow.y - player.y) ** 2);
+                            
+                            if (dist < 20) {
+                                this.socket.emit('playerHit', {
+                                    playerId: playerId,
+                                    shooterId: arrow.shooter,
+                                    type: 'friendly'
+                                });
+                                return false;
+                            }
+                        }
+                    }
+                    
+                    // Check beast collisions
+                    for (let i = this.beasts.length - 1; i >= 0; i--) {
+                        const beast = this.beasts[i];
+                        const dist = Math.sqrt((arrow.x - beast.x) ** 2 + (arrow.y - beast.y) ** 2);
+                        
+                        if (dist < beast.size) {
+                            this.beasts.splice(i, 1);
+                            this.createParticles(beast.x, beast.y, '#FFD700', 5);
+                            return false;
+                        }
+                    }
+                    
+                    return true;
+                });
+                
+                // Update beasts
+                this.beasts.forEach(beast => {
+                    const alivePlayers = Array.from(this.players.values()).filter(p => p.health > 0);
+                    if (alivePlayers.length === 0) return;
+                    
+                    const target = alivePlayers.reduce((closest, player) => {
+                        const dist = Math.sqrt((beast.x - player.x) ** 2 + (beast.y - player.y) ** 2);
+                        return !closest || dist < closest.dist ? {player, dist} : closest;
+                    }, null);
+                    
+                    if (target) {
+                        const deltaX = target.player.x - beast.x;
+                        const deltaY = target.player.y - beast.y;
+                        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                        
+                        if (distance > 0) {
+                            beast.x += (deltaX / distance) * beast.speed;
+                            beast.y += (deltaY / distance) * beast.speed;
+                        }
+                        
+                        if (distance < beast.size + 20) {
+                            this.socket.emit('playerHit', {
+                                playerId: target.player.id,
+                                shooterId: 'beast',
+                                type: 'beast'
+                            });
+                            
+                            const index = this.beasts.indexOf(beast);
+                            if (index > -1) this.beasts.splice(index, 1);
+                        }
+                    }
+                });
+                
+                // Update particles
+                this.particles = this.particles.filter(particle => {
+                    particle.x += particle.vx;
+                    particle.y += particle.vy;
+                    particle.vx *= 0.95;
+                    particle.vy *= 0.95;
+                    particle.life--;
+                    return particle.life > 0;
+                });
+                
+                this.updateUI();
+            }
+            
+            render() {
+                // Clear canvas
+                this.ctx.fillStyle = '#654321';
+                this.ctx.fillRect(0, 0, this.width, this.height);
+                
+                // Draw players
+                this.players.forEach(player => {
+                    if (player.health <= 0) return;
+                    
+                    this.ctx.fillStyle = player.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    // Face
+                    this.ctx.fillStyle = '#000';
+                    this.ctx.fillRect(player.x - 4, player.y - 4, 2, 2);
+                    this.ctx.fillRect(player.x + 2, player.y - 4, 2, 2);
+                    
+                    // Health bar
+                    const barWidth = 30;
+                    const healthPercent = player.health / 5;
+                    this.ctx.fillStyle = '#FF0000';
+                    this.ctx.fillRect(player.x - barWidth/2, player.y - 35, barWidth, 4);
+                    this.ctx.fillStyle = '#00FF00';
+                    this.ctx.fillRect(player.x - barWidth/2, player.y - 35, barWidth * healthPercent, 4);
+                    
+                    // Label
+                    this.ctx.fillStyle = 'white';
+                    this.ctx.font = '12px Courier New';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText(player.id === this.playerId ? 'YOU' : 'P' + (Array.from(this.players.keys()).indexOf(player.id) + 1), player.x, player.y - 40);
+                });
+                
+                // Draw arrows
+                this.arrows.forEach(arrow => {
+                    this.ctx.fillStyle = arrow.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(arrow.x, arrow.y, arrow.size, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+                
+                // Draw beasts
+                this.beasts.forEach(beast => {
+                    this.ctx.fillStyle = beast.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(beast.x, beast.y, beast.size, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    // Eyes
+                    this.ctx.fillStyle = '#FF0000';
+                    this.ctx.fillRect(beast.x - 4, beast.y - 4, 2, 2);
+                    this.ctx.fillRect(beast.x + 2, beast.y - 4, 2, 2);
+                });
+                
+                // Draw particles
+                this.particles.forEach(particle => {
+                    const alpha = particle.life / particle.maxLife;
+                    this.ctx.fillStyle = particle.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+                    this.ctx.beginPath();
+                    this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+            }
+            
+            updateUI() {
+                if (!this.myPlayer) return;
+                
+                const hearts = '♥'.repeat(this.myPlayer.health) + '♡'.repeat(5 - this.myPlayer.health);
+                document.getElementById('health').textContent = hearts;
+                
+                const alivePlayers = Array.from(this.players.values()).filter(p => p.health > 0);
+                document.getElementById('playersAlive').textContent = alivePlayers.length;
+                
+                document.getElementById('timer').textContent = this.gameTime + 's';
+            }
+            
+            updateConnectionStatus(status) {
+                document.getElementById('connectionText').textContent = status;
+            }
+            
+            startTimer() {
+                const timer = setInterval(() => {
+                    this.gameTime--;
+                    this.socket.emit('timeUpdate', { time: this.gameTime });
+                    
+                    if (this.gameTime <= 0) {
+                        clearInterval(timer);
+                    }
+                }, 1000);
+            }
+            
+            gameLoop() {
+                this.update();
+                this.render();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+        
+        // Global functions for buttons
+        let game;
+        
+        function createRoom() {
+            game.socket.emit('createRoom', {
+                name: 'Player ' + Math.floor(Math.random() * 1000)
+            });
+        }
+        
+        function showJoinMenu() {
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('joinMenu').classList.remove('hidden');
+        }
+        
+        function hideJoinMenu() {
+            document.getElementById('joinMenu').classList.add('hidden');
+            document.getElementById('mainMenu').classList.remove('hidden');
+        }
+        
+        function joinRoom() {
+            const roomCode = document.getElementById('roomCodeInput').value.toUpperCase();
+            if (roomCode.length === 4) {
+                game.socket.emit('joinRoom', {
+                    roomCode: roomCode,
+                    playerData: {
+                        name: 'Player ' + Math.floor(Math.random() * 1000)
+                    }
+                });
+            }
+        }
+        
+        function startGame() {
+            game.socket.emit('startGame');
+        }
+        
+        // Start the game
+        window.addEventListener('load', () => {
+            game = new BeastSwarmMultiplayer();
+        });
+    </script>
+</body>
+</html>
